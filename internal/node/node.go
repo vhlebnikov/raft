@@ -147,7 +147,12 @@ func (n *Node) resetElectionTimeout() {
 	n.elTicker.Reset(n.electionInterval)
 }
 
-// startElection for every election timeout knocks off
+// Принцип работы:
+// - начинаем голосование, как только election timeout истекает
+// - текущая нода становится кандидатом и увеличивает терм на 1
+// - голосует за себя и сбрасывает голоса других нод (локально)
+// - сброс таймаута выборов
+// - запрашиваются голоса у других нод
 func (n *Node) startElection() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -180,6 +185,10 @@ func (n *Node) heartbeatAction() {
 	n.appendEntries()
 }
 
+// Принцип работы:
+// - когда нода набирает количество голосов больше кворума, тогда она становится лидером
+// - сбрасываем позиции nextIndex и matchIndex для всех нод в длину лога текущей ноды - 1 и 0 соответственно
+// - потому как теперь состояние всех нод опирается на состояние текущей
 func (n *Node) becomeLeader() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -224,6 +233,10 @@ func (n *Node) becomeLeader() {
 	}
 }
 
+// Принцип работы:
+// - если вызывается для лидера, при достижении кворума для некоторого индекса двигаем commitIndex
+// - если commitIndex (индекс подтвержденного между нодами вхождения лога) больше, чем индекс, последнего применённого к
+// машине состояний, вхождения, тогда применяем его к машине
 func (n *Node) advanceCommitIndex() {
 	n.mu.Lock()
 	defer n.mu.Unlock()

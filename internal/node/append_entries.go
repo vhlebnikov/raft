@@ -25,6 +25,11 @@ type AppendEntriesResponse struct {
 	Success bool // true if follower contained entry matching prevLogIndex and prevLogTerm
 }
 
+// Apply
+// Принцип работы:
+// - доступен только лидеру
+// - добавляет новые вхождения в свой лог и ожидает в созданных каналах, пока другие ноды закомитят индекс некоторого Entry
+// - только после подтверждения всех вхождений функция возвращает управление
 func (n *Node) Apply(commands []statemachine.Command) ([]statemachine.ApplyResult, error) {
 	n.mu.Lock()
 
@@ -69,6 +74,14 @@ func (n *Node) Apply(commands []statemachine.Command) ([]statemachine.ApplyResul
 	return results, nil
 }
 
+// Принцип работы:
+// - не нужно слать сообщения самому себе
+// - асинхронно рассылаем сообщения остальным нодам
+// - берем только ту часть лога текущей ноды, которой нет у другой ноды
+// - если в полученном ответе терм больше, чем у текущего сервера, то становимся follower
+// - если термы запроса и ответа не совпадают, то данный ответ является не актуальным и можно его не учитывать
+// - если ответ от другой ноды успешный, то мы устанавливаем её состояние как у текущей ноды
+// - если ответ ноды неуспешный, то надо откатываться назад, и искать, где произошло расхождение
 func (n *Node) appendEntries() {
 	for id := range n.cluster {
 		if id == n.id {
@@ -136,6 +149,13 @@ func (n *Node) appendEntries() {
 	}
 }
 
+// HandleAppendEntriesRequest
+// Принцип работы:
+// - если пришедший запрос имеет терм больше терма текущей ноды, то текущая нода становится follower
+// - если текущая нода является кандидатом, и терм запроса совпадает с текущим термом ноды, значит нода получила appendEntries от лидера и становится follower
+// - если пришедший запрос имеет терм меньше терма текущей ноды, то это запрос от старого лидера, и его нужно пропустить
+// - сбрасываем election timeout, так как лидер есть и живой
+// - убеждаемся, что с логом текущего сервера все нормально
 func (n *Node) HandleAppendEntriesRequest(req AppendEntriesRequest, res *AppendEntriesResponse) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()

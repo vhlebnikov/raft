@@ -75,7 +75,7 @@ func getConfig(logger zerolog.Logger) config {
 }
 
 const (
-	_heartBeatInterval = 2 * time.Second
+	_heartBeatInterval = 100 * time.Millisecond
 	_metadataDir       = "./meta"
 )
 
